@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -16,8 +17,10 @@ type ErrorResponse struct {
 }
 
 type Account struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	Url           string `json:"url"`
+	IsSecProtocal bool   `json:"secProtocal"`
+	AccessKey     string `json:"accessKey"`
+	SecretKey     string `json:"secretKey"`
 }
 
 func main() {
@@ -43,11 +46,20 @@ func main() {
 		log.Fatalf("Parse account info failed: %v", err)
 	}
 
+	url := account.Url
+	isSecProtocal := account.IsSecProtocal
 	accessKey := account.AccessKey
 	secretKey := account.SecretKey
 
 	//Get token
-	token, err := getToken(accessKey, secretKey)
+	var protocal string
+	if isSecProtocal {
+		protocal = "https"
+	} else {
+		protocal = "http"
+	}
+	completeUrl := fmt.Sprintf("%s://%s", protocal, url)
+	token, err := getToken(completeUrl, accessKey, secretKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -85,8 +97,15 @@ func main() {
 	//Streaming test
 	totalTime = 0.0
 	totalCount = 0
+
+	if isSecProtocal {
+		protocal = "wss"
+	} else {
+		protocal = "ws"
+	}
+
 	for i := 0; i < requestCount; i++ {
-		go sendStreaming(token, streamingConfig, ch)
+		go sendStreaming(protocal, url, token, streamingConfig, ch)
 	}
 
 	for i := 0; i < requestCount; i++ {

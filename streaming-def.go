@@ -52,4 +52,5 @@ type StreamingResponse struct {
 	Status string `json:"status,omitempty"`
 }
 
-const CHUNK_LENGTH = 8192 * 8
+//Chunk length must be 2^n
+const CHUNK_LENGTH = 8192

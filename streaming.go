@@ -12,23 +12,26 @@ import (
 )
 
 func sendBinaryData(c *websocket.Conn, data chan []byte) {
+	totalLen := 0
 	for chunk := range data {
-		//log.Printf("Read %v bytes from channel", len(chunk))
+		//log.Printf("Write %v bytes from channel", len(chunk))
+		totalLen += len(chunk)
 		err := c.WriteMessage(websocket.BinaryMessage, chunk)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+	//log.Printf("Write %v bytes to stream in total", totalLen)
 	c.WriteJSON(StreamingRequest{
 		"command": endStream.String(),
 	})
 }
 
 type StreamingRequestConfig struct {
-	Language   string
-	SampleRate int
-	FilePath   string
-	PhraseList []string
+	Language   string   `json:"languageCode"`
+	SampleRate int      `json:"sampleRate"`
+	FilePath   string   `json:"audioFile"`
+	PhraseList []string `json:"phraseList"`
 }
 
 func handleSessionMessage(c *websocket.Conn, done chan struct{}, dataCh chan []byte, config StreamingRequestConfig) {
@@ -77,16 +80,15 @@ func handleSessionMessage(c *websocket.Conn, done chan struct{}, dataCh chan []b
 			recognitionError.String(),
 			phraseListError.String():
 			log.Fatal("Recognization error: ", respJson.Value)
+			return
 		default:
 			log.Fatal("Unknown response: ", respJson)
 		}
 	}
 }
 
-func buildWebsocketConnection(token string) *websocket.Conn {
-	addr := "translate.signans.io"
-
-	u := url.URL{Scheme: "wss", Host: addr, Path: "/api/v1/translate/stt-streaming", RawQuery: url.PathEscape(fmt.Sprintf("token=Bearer %s", token))}
+func buildWebsocketConnection(protocal string, addr string, token string) *websocket.Conn {
+	u := url.URL{Scheme: protocal, Host: addr, Path: "/api/v1/translate/stt-streaming", RawQuery: url.PathEscape(fmt.Sprintf("token=Bearer %s", token))}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -98,6 +100,7 @@ func buildWebsocketConnection(token string) *websocket.Conn {
 
 func readFromFile(dataCh chan []byte, filePath string) {
 	defer close(dataCh)
+	totalLen := 0
 	f, err := os.OpenFile(filePath, os.O_RDONLY, 0600)
 	if err != nil {
 		log.Fatal(err)
@@ -110,28 +113,29 @@ func readFromFile(dataCh chan []byte, filePath string) {
 		if e != nil {
 			log.Fatal(e)
 		}
-		//log.Printf("Write %v bytes to channel", len)
+		totalLen += len
+		//log.Printf("Read %v bytes from file", len)
 		dataCh <- buffer
 		if len < CHUNK_LENGTH {
 			break
 		}
 	}
+	//log.Printf("File length: %v ", totalLen)
 }
 
-func sendStreaming(token string, config StreamingRequestConfig, ch chan float64) {
+func sendStreaming(protocal string, url string, token string, config StreamingRequestConfig, ch chan float64) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	c := buildWebsocketConnection(token)
+	c := buildWebsocketConnection(protocal, url, token)
 	defer c.Close()
 
 	dataCh := make(chan []byte)
 	done := make(chan struct{})
 
 	startTime := time.Now()
-	go handleSessionMessage(c, done, dataCh, config)
-
 	go readFromFile(dataCh, config.FilePath)
+	go handleSessionMessage(c, done, dataCh, config)
 
 	for {
 		select {

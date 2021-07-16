@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -22,13 +23,13 @@ type GetTokenResponse struct {
 	} `json:"data"`
 }
 
-func getToken(accessKey string, secretKey string) (string, error) {
+func getToken(url string, accessKey string, secretKey string) (string, error) {
 	request := GetTokenRequest{accessKey, secretKey, 10000}
 	b, err := json.Marshal(request)
 	if err != nil {
 		log.Fatal(err)
 	}
-	resp, err := http.Post("https://translate.signans.io/api/v1/token", "application/json", bytes.NewBuffer(b))
+	resp, err := http.Post(fmt.Sprintf("%s/api/v1/token", url), "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		log.Fatal(err)
 	}
